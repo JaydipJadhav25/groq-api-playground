@@ -1,36 +1,89 @@
 import dotenv from "dotenv";
 dotenv.config();
 import Groq from "groq-sdk";
+import { tvly } from "./weSearchService.js";
 
 const groq = new Groq({ apiKey: process.env["GROQ_API_KEY"] });
 
 async function main() {
+  //create globla meesgae storge
+  let messages = [
+    {
+      role: "system",
+      content: `
+You are a smart personal assistant.
+You answer user questions clearly, accurately, and in a simple way.
+
+You have access to the following tool:
+webSearch({ query: string }) → Use this to get latest, real-time, or up-to-date information from the internet.
+
+--- BEHAVIOR RULES ---
+
+1. Understand the user's question carefully.
+
+2. Decide:
+   - If the answer is already known → respond directly.
+   - If the question يحتاج latest / real-time / unknown info → use the webSearch tool.
+
+3. When using the tool:
+   - Generate a clear and relevant search query.
+   - Call the tool with proper arguments.
+
+4. After receiving tool results:
+   - Read and understand the result.
+   - Extract useful information.
+   - Respond with a clear, final answer.
+
+5. If tool result is not enough:
+   - You may call the tool again with a better query.
+
+6. Never guess if unsure — use the tool instead.
+
+7. Do NOT mention tool calls in final answer.
+   - Only provide helpful response to user.
+
+--- FLOW EXAMPLE (IMPORTANT) ---
+
+Example:
+
+User: "When was iPhone 17 launched?"
+
+Step 1: Think → This needs latest info  
+Step 2: Call tool:
+  webSearch({ query: "iPhone 17 launch date" })
+
+Step 3: Tool returns:
+  "iPhone 17 is expected to launch in September 2025..."
+
+Step 4: Final Answer:
+  "The iPhone 17 has not been officially launched yet, but it is expected around September 2025."
+
+--- RESPONSE STYLE ---
+
+- Keep answers short and simple
+- Avoid unnecessary details
+- Be clear and helpful
+
+`,
+    },
+    {
+      role: "user",
+      // content: "when was iphone 17 launched?",
+      content: "what is whather of pune right now ?",
+    },
+  ];
+
   const competion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     temperature: 0,
-    messages: [
-      {
-        role: "system",
-        content: `you are smart personal assistent.
-                  who answers tha askes questions. you give propely answer in simple way.
-                  you have access to follwing tool:
-                  webSearch({query :string }) // serach the leastes information and real time data on internet.
-
-                  `,
-      },
-      {
-        role: "user",
-        // content : "when was iphone 17 launched?"
-        content: "when was iphone 17 launched?",
-      },
-    ],
-
+    messages: messages,
     tools: [
       {
         type: "function",
         function: {
           name: "webSearch",
-          description: "serach the leastes information and real time data on internet.",
+          description:
+            "serach the leastes information and real time data on internet.",
           parameters: {
             // JSON Schema object
             type: "object",
@@ -45,47 +98,74 @@ async function main() {
         },
       },
     ],
-    tool_choice : 'auto'
+    tool_choice: "auto",
   });
-  
+
+  //----------// push model respone //-----------------//
+  //assistence message add in history
+  messages.push(competion.choices[0].message);
+
   //get any tool call request from model
   const toolCalls = competion.choices[0].message.tool_calls;
 
-
   //check if not tool call so model genrate final output and return
-   if(!toolCalls){
-    console.log("Output :");
+  if (!toolCalls) {
+    console.log("Output No Tool Call  :");
     console.log(`Assistant : ${competion.choices[0].message.content}`);
     return;
   }
 
   //this section called tool
-  for(const tool of toolCalls){
+  for (const tool of toolCalls) {
     // console.log(tool)
     const functionName = tool.function.name;
     const query = tool.function.arguments;
-    console.log(functionName , query);
+    console.log(functionName, query);
 
-    if (functionName === 'webSearch') {
-      const toolResult =   await  webSearch(JSON.parse(query));
-      console.log("toolResult : " , toolResult);
+    if (functionName === "webSearch") {
+      const toolResult = await webSearch(JSON.parse(query));
+      // console.log("toolResult : ", toolResult);
+
+      messages.push({
+        tool_call_id: tool.id,
+        role: "tool",
+        name: functionName,
+        content: toolResult,
+      });
     }
   }
 
+  const competion2 = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    temperature: 0,
+    messages: messages,
+  });
 
-
-
-
-  //   console.log(JSON.parse(competion.choices[0].message))
-//   console.log(competion.choices[0].message);
-  // console.log(JSON.stringify(competion.choices[0].message , null , 2))
+  //now check compeltion two
+  console.log(
+    "..............................................................................................",
+  );
+  console.log("\n\n");
+  console.log("AGENT RESPONSE : ");
+  console.log("\n\n");
+  console.log(JSON.stringify(competion2.choices[0].message, null, 2));
+  console.log("\n\n");
+  console.log(
+    "..............................................................................................",
+  );
 }
 
 main();
 
 //to search on web function
 async function webSearch({ query }) {
-  // console.log("wesearch : " , query);
   console.log("calling tool................");
-  return "The iPhone 17 lineup was officially announced by Apple on September 9, 2025,";
+
+  const result = await tvly.search(query);
+  const finalResult = result.results
+    .map((result) => result.content)
+    .join("\n\n");
+  // console.log(result)
+  // console.log("finlresult :" , finalResult);
+  return finalResult;
 }

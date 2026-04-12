@@ -7,8 +7,8 @@ export const tvly = tavily({
 });
 
 
-async function main() {
-    const response = await tvly.search("Who is Leo Messi?");
-    console.log(response);
-}
-main();
+// async function main() {
+//     const response = await tvly.search("Who is Leo Messi?");
+//     console.log(response);
+// }
+// main();
