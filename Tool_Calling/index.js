@@ -135,10 +135,33 @@ Step 4: Final Answer:
     }
   }
 
+
   const competion2 = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     temperature: 0,
     messages: messages,
+    tools: [
+      {
+        type: "function",
+        function: {
+          name: "webSearch",
+          description:
+            "serach the leastes information and real time data on internet.",
+          parameters: {
+            // JSON Schema object
+            type: "object",
+            properties: {
+              query: {
+                type: "string",
+                description: "the serach query to perform serach on.",
+              },
+            },
+            required: ["query"],
+          },
+        },
+      },
+    ],
+    tool_choice: "auto",
   });
 
   //now check compeltion two
