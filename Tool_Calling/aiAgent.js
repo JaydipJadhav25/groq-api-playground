@@ -183,6 +183,8 @@ Step 4: Final Answer:
     count++;
   }
 
+  rl.close()
+
   //   return ;
 }
 
